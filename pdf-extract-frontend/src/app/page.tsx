@@ -2,9 +2,18 @@
 
 import { useState } from 'react';
 import PdfViewer from '@/components/PdfViewer';
+import TextTranscript from '@/components/TextTranscript';
+
+// Mock data for testing
+const MOCK_EXTRACTED_DATA = [
+  { text: "This is the first paragraph.", bbox: [10, 10, 200, 30] },
+  { text: "This is the second paragraph.", bbox: [10, 40, 200, 60] },
+  { text: "This is the third paragraph with some longer text that might wrap.", bbox: [10, 70, 200, 100] },
+];
 
 export default function Home() {
   const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [extractedData, setExtractedData] = useState<Array<{text: string, bbox: number[]}>>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -12,8 +21,8 @@ export default function Home() {
     e.preventDefault();
     if (!pdfUrl) return;
     
-    // We'll implement the actual extraction later
-    console.log(`Will process PDF: ${pdfUrl}`);
+    // Use mock data for now
+    setExtractedData(MOCK_EXTRACTED_DATA);
   };
 
   return (
@@ -54,7 +63,7 @@ export default function Home() {
         
         <div className="border rounded p-4 min-h-[500px]">
           <h2 className="text-xl font-semibold mb-2">Extracted Text</h2>
-          <p className="text-gray-500">Extracted text will appear here...</p>
+          <TextTranscript data={extractedData} />
         </div>
       </div>
     </main>
