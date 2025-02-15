@@ -6,16 +6,29 @@ import TextTranscript from '@/components/TextTranscript';
 
 // Mock data for testing
 const MOCK_EXTRACTED_DATA = [
-  { text: "This is the first paragraph.", bbox: [10, 10, 200, 30] },
-  { text: "This is the second paragraph.", bbox: [10, 40, 200, 60] },
-  { text: "This is the third paragraph with some longer text that might wrap.", bbox: [10, 70, 200, 100] },
+  { 
+    text: "This is the first paragraph.", 
+    bbox: [72, 720, 300, 700], // PDF coordinates (bottom-left origin)
+    page: 0
+  },
+  { 
+    text: "This is the second paragraph.", 
+    bbox: [0, 0, 300, 300], // PDF coordinates (bottom-left origin)
+    page: 0
+  },
+  { 
+    text: "This is the second page's paragraph.", 
+    bbox: [72, 720, 144, 700], // PDF coordinates (bottom-left origin)
+    page: 1
+  },
 ];
 
 export default function Home() {
   const [pdfUrl, setPdfUrl] = useState<string>('');
-  const [extractedData, setExtractedData] = useState<Array<{text: string, bbox: number[]}>>([]);
+  const [extractedData, setExtractedData] = useState<Array<{ text: string; bbox: number[]; page: number }>>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedText, setSelectedText] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +36,10 @@ export default function Home() {
     
     // Use mock data for now
     setExtractedData(MOCK_EXTRACTED_DATA);
+  };
+
+  const handleTextClick = (text: string) => {
+    setSelectedText(text === selectedText ? null : text);
   };
 
   return (
@@ -58,12 +75,24 @@ export default function Home() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="border rounded p-4 min-h-[500px]">
           <h2 className="text-xl font-semibold mb-2">PDF Viewer</h2>
-          {pdfUrl ? <PdfViewer url={pdfUrl} /> : <p className="text-gray-500">Enter a PDF URL above</p>}
+          {pdfUrl ? (
+            <PdfViewer 
+              url={pdfUrl} 
+              extractedData={extractedData} 
+              selectedText={selectedText}
+            />
+          ) : (
+            <p className="text-gray-500">Enter a PDF URL above</p>
+          )}
         </div>
         
         <div className="border rounded p-4 min-h-[500px]">
           <h2 className="text-xl font-semibold mb-2">Extracted Text</h2>
-          <TextTranscript data={extractedData} />
+          <TextTranscript 
+            data={extractedData}
+            selectedText={selectedText}
+            onTextClick={handleTextClick}
+          />
         </div>
       </div>
     </main>
