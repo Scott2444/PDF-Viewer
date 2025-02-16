@@ -2,12 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Worker, Viewer, SpecialZoomLevel, ZoomEvent } from '@react-pdf-viewer/core';
-import { defaultLayoutPlugin, DefaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
-import { 
-  highlightPlugin, 
-  RenderHighlightTargetProps,
-  RenderHighlightsProps,
-} from '@react-pdf-viewer/highlight';
+import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
+import { highlightPlugin, RenderHighlightsProps } from '@react-pdf-viewer/highlight';
 import { pageNavigationPlugin, PageNavigationPlugin } from '@react-pdf-viewer/page-navigation';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/default-layout/lib/styles/index.css';
@@ -24,9 +20,26 @@ interface PdfViewerProps {
   selectedId?: string | null;
 }
 
+interface rect {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  height: number;
+}
+
+interface Highlight {
+  id: string;
+  pageIndex: number;
+  rects: Array<rect>;
+  content: {
+    text: string;
+  };
+}
+
 const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
-  const [highlights, setHighlights] = useState<any[]>([]);
-  const [pageHeights, setPageHeights] = useState<number[]>([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   
@@ -37,7 +50,7 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
   const pageNavigationPluginInstance = pageNavigationPlugin();
   const defaultLayoutPluginInstance = defaultLayoutPlugin();
   const highlightPluginInstance = highlightPlugin({
-    renderHighlightTarget: (props: RenderHighlightTargetProps) => {
+    renderHighlightTarget: () => {
       return <></>;
     },
     renderHighlights: (props: RenderHighlightsProps) => {
@@ -47,7 +60,7 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
             .filter((highlight) => highlight.pageIndex === props.pageIndex)
             .map((highlight, index) => (
               <div key={index}>
-                {highlight.rects.map((rect: any, rectIndex: number) => (
+                {highlight.rects.map((rect: rect, rectIndex: number) => (
                   <div
                     key={rectIndex}
                     style={{
@@ -79,11 +92,6 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
   // useEffect(() => {
   //   console.log('Highlights updated:', highlights);
   // }, [highlights]);
-
-  // // Debug: Log when pageHeights are updated
-  // useEffect(() => {
-  //   console.log('Page heights updated:', pageHeights);
-  // }, [pageHeights]);
 
   // Convert extractedData to the format expected by the highlight plugin
   useEffect(() => {
@@ -134,24 +142,6 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
     }
   }, [selectedPage]);
 
-  // Handle document load to get page dimensions
-  const handleDocumentLoad = (pdfDoc: any) => {
-    // console.log('Document loaded:', pdfDoc);
-
-    const numPages = pdfDoc.doc.numPages;
-    // console.log('Number of pages:', numPages);
-
-    const promises = [];
-    for (let i = 1; i <= numPages; i++) {
-      promises.push({ pageIndex: i - 1, height: 792 });
-    }
-
-    Promise.all(promises).then((pageData) => {
-      const heights = pageData.sort((a, b) => a.pageIndex - b.pageIndex).map((p) => p.height);
-      console.log('All page heights:', heights);
-      setPageHeights(heights);
-    });
-  };
 
   // Handle zoom change
   const handleZoom = (e: ZoomEvent) => {
@@ -171,7 +161,6 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
             pageNavigationPluginInstance,
           ]}
           defaultScale={SpecialZoomLevel.PageFit}
-          onDocumentLoad={handleDocumentLoad}
           onZoom={handleZoom}
         />
       </Worker>
