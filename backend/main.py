@@ -1,4 +1,3 @@
-# backend/main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import fitz  # PyMuPDF
@@ -10,6 +9,7 @@ from PIL import Image
 import io
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
+from typing import List, Dict, Any
 
 app = FastAPI()
 
@@ -50,7 +50,12 @@ def group_text_blocks(text_blocks, tolerance=5):
     
     for block in sorted_blocks:
         if not current_group:
-            current_group.append(block)
+            current_group.append({
+                'id': block['id'],  # Preserve the ID of the first block
+                'text': block['text'],
+                'bbox': block['bbox'].copy(),  # Create a copy of the bounding box
+                'page': block['page']
+            })
         else:
             last_block = current_group[-1]
             
@@ -62,16 +67,77 @@ def group_text_blocks(text_blocks, tolerance=5):
                 # Merge text and update bounding box
                 last_block['text'] += ' ' + block['text']
                 last_block['bbox'][2] = max(last_block['bbox'][2], block['bbox'][2])  # Update right edge
-                last_block['bbox'][3] = min(last_block['bbox'][3], block['bbox'][3])  # Update bottom edge
+                last_block['bbox'][3] = max(last_block['bbox'][3], block['bbox'][3])  # Update bottom edge
             else:
                 # Start a new group
                 grouped.append(current_group)
-                current_group = [block]
+                current_group = [{
+                    'id': block['id'],  # Preserve the ID of the first block in the new group
+                    'text': block['text'],
+                    'bbox': block['bbox'].copy(),  # Create a copy of the bounding box
+                    'page': block['page']
+                }]
     
     if current_group:
         grouped.append(current_group)
     
-    return grouped
+    # Return flattened groups (each group is now a single line)
+    flattened_groups = []
+    for group in grouped:
+        if len(group) == 1:
+            flattened_groups.append(group[0])
+        else:
+            # Merge all blocks in the group
+            merged = {
+                'id': group[0]['id'],
+                'text': ' '.join(block['text'] for block in group),
+                'bbox': [
+                    min(block['bbox'][0] for block in group),
+                    min(block['bbox'][1] for block in group),
+                    max(block['bbox'][2] for block in group),
+                    max(block['bbox'][3] for block in group)
+                ],
+                'page': group[0]['page']
+            }
+            flattened_groups.append(merged)
+    
+    return flattened_groups
+
+def group_paragraphs(lines: List[Dict[str, Any]], vertical_gap_threshold: float = 15.0):
+    """Group lines into paragraphs based on vertical proximity."""
+    paragraphs = []
+    current_paragraph = []
+    
+    # Sort lines by page and vertical position
+    sorted_lines = sorted(lines, key=lambda x: (x['page'], x['bbox'][1]))
+    
+    for line in sorted_lines:
+        if not current_paragraph:
+            current_paragraph.append(line)
+        else:
+            last_line = current_paragraph[-1]
+            # Calculate vertical gap between last line's bottom and current line's top
+            gap = line['bbox'][1] - last_line['bbox'][3]
+            
+            if (line['page'] == last_line['page'] and 
+                gap <= vertical_gap_threshold):
+                current_paragraph.append(line)
+            else:
+                paragraphs.append(current_paragraph)
+                current_paragraph = [line]
+    
+    if current_paragraph:
+        paragraphs.append(current_paragraph)
+    
+    return paragraphs
+
+def create_paragraph_bbox(lines: List[Dict[str, Any]]):
+    """Create a bounding box that encompasses all lines in the paragraph."""
+    left = min(line['bbox'][0] for line in lines)
+    top = min(line['bbox'][1] for line in lines)
+    right = max(line['bbox'][2] for line in lines)
+    bottom = max(line['bbox'][3] for line in lines)
+    return [left, top, right, bottom]
 
 @app.post("/extract")
 async def extract_text(request: PDFRequest):
@@ -138,25 +204,23 @@ async def extract_text(request: PDFRequest):
                             'page': page_num
                         })
         
-        # Group text blocks into logical sections
-        grouped_blocks = group_text_blocks(extracted_data)
+        # Group text blocks into lines
+        line_grouped_blocks = group_text_blocks(extracted_data)
         
-        # Format the grouped blocks into ExtractionResult objects
+        # Group lines into paragraphs
+        paragraph_blocks = group_paragraphs(line_grouped_blocks)
+        
+        # Format paragraphs
         formatted_data = []
-        for group in grouped_blocks:
-            if group:
-                first_block = group[0]
-                last_block = group[-1]
+        for paragraph in paragraph_blocks:
+            if paragraph:
+                text = ' '.join(line['text'] for line in paragraph)
+                bbox = create_paragraph_bbox(paragraph)
                 formatted_data.append(ExtractionResult(
-                    id=first_block['id'],  # Use the ID of the first block in the group
-                    text=' '.join(block['text'] for block in group),
-                    bbox=[
-                        first_block['bbox'][0],  # Left
-                        first_block['bbox'][1],  # Top
-                        last_block['bbox'][2],   # Right
-                        last_block['bbox'][3]    # Bottom
-                    ],
-                    page=first_block['page']
+                    id=str(uuid4()),  # Generate a new ID for the paragraph
+                    text=text,
+                    bbox=bbox,
+                    page=paragraph[0]['page']
                 ))
         
         doc.close()
