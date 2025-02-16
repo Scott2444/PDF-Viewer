@@ -38,6 +38,39 @@ def convert_image_to_pdf_coords(image_x, image_y, image_w, image_h, page_width, 
         (image_y + image_h) * (page_height / image_h)  # y2 flipped to top-left origin
     ]
 
+def group_text_blocks(text_blocks, tolerance=5):
+    """Group text blocks into logical sections based on spatial proximity."""
+    grouped = []
+    current_group = []
+    
+    # Sort text blocks by page, then by y-coordinate (top to bottom), then by x-coordinate (left to right)
+    sorted_blocks = sorted(text_blocks, key=lambda x: (x['page'], x['bbox'][1], x['bbox'][0]))
+    
+    for block in sorted_blocks:
+        if not current_group:
+            current_group.append(block)
+        else:
+            last_block = current_group[-1]
+            
+            # Check if the current block is on the same line/paragraph
+            if (block['page'] == last_block['page'] and
+                abs(block['bbox'][1] - last_block['bbox'][1]) <= tolerance and  # Similar y-coordinate
+                block['bbox'][0] <= last_block['bbox'][2] + tolerance):  # Close x-coordinate
+                
+                # Merge text and update bounding box
+                last_block['text'] += ' ' + block['text']
+                last_block['bbox'][2] = max(last_block['bbox'][2], block['bbox'][2])  # Update right edge
+                last_block['bbox'][3] = min(last_block['bbox'][3], block['bbox'][3])  # Update bottom edge
+            else:
+                # Start a new group
+                grouped.append(current_group)
+                current_group = [block]
+    
+    if current_group:
+        grouped.append(current_group)
+    
+    return grouped
+
 @app.post("/extract")
 async def extract_text(request: PDFRequest):
     try:
@@ -67,11 +100,12 @@ async def extract_text(request: PDFRequest):
             
             if text_blocks:
                 for block in text_blocks:
-                    extracted_data.append(ExtractionResult(
-                        text=block[4],
-                        bbox=block[:4],
-                        page=page_num
-                    ))
+                    # Convert tuple to dictionary for grouping
+                    extracted_data.append({
+                        'text': block[4],  # Text content
+                        'bbox': list(block[:4]),  # Bounding box (convert tuple to list)
+                        'page': page_num
+                    })
             else:
                 # Fallback to OCR
                 pix = page.get_pixmap()
@@ -94,11 +128,31 @@ async def extract_text(request: PDFRequest):
                             page_width, page_height
                         )
                         
-                        extracted_data.append(ExtractionResult(
-                            text=text,
-                            bbox=bbox,
-                            page=page_num
-                        ))
+                        extracted_data.append({
+                            'text': text,
+                            'bbox': bbox,
+                            'page': page_num
+                        })
+        
+        # Group text blocks into logical sections
+        grouped_blocks = group_text_blocks(extracted_data)
+        
+        # Format the grouped blocks into ExtractionResult objects
+        formatted_data = []
+        for group in grouped_blocks:
+            if group:
+                first_block = group[0]
+                last_block = group[-1]
+                formatted_data.append(ExtractionResult(
+                    text=' '.join(block['text'] for block in group),
+                    bbox=[
+                        first_block['bbox'][0],  # Left
+                        first_block['bbox'][1],  # Top
+                        last_block['bbox'][2],   # Right
+                        last_block['bbox'][3]    # Bottom
+                    ],
+                    page=first_block['page']
+                ))
         
         doc.close()
     except Exception as e:
@@ -106,4 +160,4 @@ async def extract_text(request: PDFRequest):
     finally:
         os.remove(temp_pdf_path)
 
-    return extracted_data
+    return formatted_data
