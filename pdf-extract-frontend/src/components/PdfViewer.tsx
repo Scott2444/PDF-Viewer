@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Worker, Viewer, SpecialZoomLevel } from '@react-pdf-viewer/core';
+import { Worker, Viewer, SpecialZoomLevel, ZoomEvent } from '@react-pdf-viewer/core';
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
 import { 
   highlightPlugin, 
@@ -21,6 +21,7 @@ interface PdfViewerProps {
 const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) => {
   const [highlights, setHighlights] = useState<any[]>([]);
   const [pageHeights, setPageHeights] = useState<number[]>([]);
+  const [zoomLevel, setZoomLevel] = useState<number>(1); // Track zoom level
 
   // Debug: Log when highlights are updated
   useEffect(() => {
@@ -105,10 +106,10 @@ const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) =>
                       background: 'rgba(255, 0, 0, 0.2)',
                       border: '1px solid rgba(255, 0, 0, 0.5)',
                       position: 'absolute',
-                      left: `${rect.x1}px`,
-                      top: `${rect.y1}px`,
-                      width: `${rect.width}px`,
-                      height: `${rect.height}px`,
+                      left: `${rect.x1 * zoomLevel}px`, // Scale x-coordinate
+                      top: `${rect.y1 * zoomLevel}px`, // Scale y-coordinate
+                      width: `${rect.width * zoomLevel}px`, // Scale width
+                      height: `${rect.height * zoomLevel}px`, // Scale height
                       pointerEvents: 'none',
                       zIndex: 1,
                     }}
@@ -141,14 +142,25 @@ const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) =>
     });
   };
 
+  // Handle zoom change
+  const handleZoom = (e: ZoomEvent) => {
+    const zoom = e.scale; // Extract zoom level from ZoomEvent
+    console.log('Zoom level changed:', zoom);
+    setZoomLevel(zoom);
+  };
+
   return (
     <div className="h-[600px]">
       <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">
         <Viewer
           fileUrl={url}
-          plugins={[defaultLayoutPluginInstance, highlightPluginInstance]}
+          plugins={[
+            defaultLayoutPluginInstance,
+            highlightPluginInstance,
+          ]}
           defaultScale={SpecialZoomLevel.PageFit}
           onDocumentLoad={handleDocumentLoad}
+          onZoom={handleZoom} // Track zoom level
         />
       </Worker>
     </div>
