@@ -6,10 +6,10 @@ import TextTranscript from '@/components/TextTranscript';
 
 export default function Home() {
   const [pdfUrl, setPdfUrl] = useState<string>('');
-  const [extractedData, setExtractedData] = useState<Array<{ text: string; bbox: number[]; page: number }>>([]);
+  const [extractedData, setExtractedData] = useState<Array<{ id: string; text: string; bbox: number[]; page: number }>>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedText, setSelectedText] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);  // Change to selectedId
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,12 +26,12 @@ export default function Home() {
         },
         body: JSON.stringify({ pdf_url: pdfUrl }),
       });
-  
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to process PDF');
       }
-  
+
       const data = await response.json();
       setExtractedData(data);
     } catch (err) {
@@ -41,8 +41,8 @@ export default function Home() {
     }
   };
 
-  const handleTextClick = (text: string) => {
-    setSelectedText(text === selectedText ? null : text);
+  const handleTextClick = (id: string) => {
+    setSelectedId(id === selectedId ? null : id);  // Update to use id
   };
 
   return (
@@ -82,7 +82,7 @@ export default function Home() {
             <PdfViewer 
               url={pdfUrl} 
               extractedData={extractedData} 
-              selectedText={selectedText}
+              selectedId={selectedId}  // Change to selectedId
             />
           ) : (
             <p className="text-gray-500">Enter a PDF URL above</p>
@@ -93,8 +93,8 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-2">Extracted Text</h2>
           <TextTranscript 
             data={extractedData}
-            selectedText={selectedText}
-            onTextClick={handleTextClick}
+            selectedId={selectedId}  // Change to selectedId
+            onTextClick={handleTextClick}  // Already updated to use id
           />
         </div>
       </div>

@@ -9,6 +9,7 @@ import pytesseract
 from PIL import Image
 import io
 from fastapi.middleware.cors import CORSMiddleware
+from uuid import uuid4
 
 app = FastAPI()
 
@@ -25,6 +26,7 @@ class PDFRequest(BaseModel):
     pdf_url: str
 
 class ExtractionResult(BaseModel):
+    id: str
     text: str
     bbox: list[float]
     page: int
@@ -102,6 +104,7 @@ async def extract_text(request: PDFRequest):
                 for block in text_blocks:
                     # Convert tuple to dictionary for grouping
                     extracted_data.append({
+                        'id': str(uuid4()),  # Add unique ID
                         'text': block[4],  # Text content
                         'bbox': list(block[:4]),  # Bounding box (convert tuple to list)
                         'page': page_num
@@ -129,6 +132,7 @@ async def extract_text(request: PDFRequest):
                         )
                         
                         extracted_data.append({
+                            'id': str(uuid4()),  # Add unique ID
                             'text': text,
                             'bbox': bbox,
                             'page': page_num
@@ -144,6 +148,7 @@ async def extract_text(request: PDFRequest):
                 first_block = group[0]
                 last_block = group[-1]
                 formatted_data.append(ExtractionResult(
+                    id=first_block['id'],  # Use the ID of the first block in the group
                     text=' '.join(block['text'] for block in group),
                     bbox=[
                         first_block['bbox'][0],  # Left

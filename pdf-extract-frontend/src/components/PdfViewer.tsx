@@ -18,11 +18,11 @@ const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worke
 
 interface PdfViewerProps {
   url: string;
-  extractedData?: Array<{ text: string; bbox: number[]; page: number }>;
-  selectedText?: string | null;
+  extractedData?: Array<{id: string, text: string, bbox: number[], page: number}>;
+  selectedId?: string | null;  // Change to selectedId
 }
 
-const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) => {
+const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
   const [highlights, setHighlights] = useState<any[]>([]);
   const [pageHeights, setPageHeights] = useState<number[]>([]);
   const [zoomLevel, setZoomLevel] = useState<number>(1); // Track zoom level
@@ -39,9 +39,9 @@ const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) =>
 
   // Convert extractedData to the format expected by the highlight plugin
   useEffect(() => {
-    if (selectedText && extractedData.length > 0 && pageHeights.length > 0) {
+    if (selectedId && extractedData.length > 0) {
       const newHighlights = extractedData
-        .filter((item) => item.text === selectedText)
+        .filter((item) => item.id === selectedId)  // Match by ID
         .map((item) => {
           const [left, top, right, bottom] = item.bbox;
   
@@ -72,7 +72,7 @@ const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) =>
     } else {
       setHighlights([]);
     }
-  }, [extractedData, selectedText, pageHeights]);
+  }, [extractedData, selectedId]);
 
   // Initialize plugins
   const defaultLayoutPluginInstance = defaultLayoutPlugin();
