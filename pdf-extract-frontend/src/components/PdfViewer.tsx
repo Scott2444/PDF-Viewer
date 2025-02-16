@@ -76,14 +76,14 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
   }, [pageNavigationPluginInstance]);
 
   // Debug: Log when highlights are updated
-  useEffect(() => {
-    console.log('Highlights updated:', highlights);
-  }, [highlights]);
+  // useEffect(() => {
+  //   console.log('Highlights updated:', highlights);
+  // }, [highlights]);
 
-  // Debug: Log when pageHeights are updated
-  useEffect(() => {
-    console.log('Page heights updated:', pageHeights);
-  }, [pageHeights]);
+  // // Debug: Log when pageHeights are updated
+  // useEffect(() => {
+  //   console.log('Page heights updated:', pageHeights);
+  // }, [pageHeights]);
 
   // Convert extractedData to the format expected by the highlight plugin
   useEffect(() => {
@@ -136,11 +136,10 @@ const PdfViewer = ({ url, extractedData = [], selectedId }: PdfViewerProps) => {
 
   // Handle document load to get page dimensions
   const handleDocumentLoad = (pdfDoc: any) => {
-    console.log('Document loaded:', pdfDoc);
+    // console.log('Document loaded:', pdfDoc);
 
-    // Access numPages correctly
     const numPages = pdfDoc.doc.numPages;
-    console.log('Number of pages:', numPages);
+    // console.log('Number of pages:', numPages);
 
     const promises = [];
     for (let i = 1; i <= numPages; i++) {

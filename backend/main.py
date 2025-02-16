@@ -14,7 +14,6 @@ import statistics
 
 app = FastAPI()
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,10 +34,10 @@ class ExtractionResult(BaseModel):
 def convert_image_to_pdf_coords(image_x, image_y, image_w, image_h, page_width, page_height):
     """Convert image coordinates to web coordinate system (top-left origin)"""
     return [
-        image_x * (page_width / image_w),  # x1 remains the same
-        image_y * (page_height / image_h),  # y1 flipped to top-left origin
-        (image_x + image_w) * (page_width / image_w),  # x2 remains the same
-        (image_y + image_h) * (page_height / image_h)  # y2 flipped to top-left origin
+        image_x * (page_width / image_w),
+        image_y * (page_height / image_h),
+        (image_x + image_w) * (page_width / image_w),
+        (image_y + image_h) * (page_height / image_h)
     ]
 
 def calculate_text_heights(text_blocks):
@@ -224,7 +223,7 @@ async def extract_text(request: PDFRequest):
                 for block in text_blocks:
                     # Convert tuple to dictionary for grouping
                     extracted_data.append({
-                        'id': str(uuid4()),  # Add unique ID
+                        'id': str(uuid4()),  # Unique ID
                         'text': block[4],  # Text content
                         'bbox': list(block[:4]),  # Bounding box (convert tuple to list)
                         'page': page_num
@@ -252,7 +251,7 @@ async def extract_text(request: PDFRequest):
                         )
                         
                         extracted_data.append({
-                            'id': str(uuid4()),  # Add unique ID
+                            'id': str(uuid4()),
                             'text': text,
                             'bbox': bbox,
                             'page': page_num

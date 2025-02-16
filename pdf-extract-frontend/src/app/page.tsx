@@ -9,7 +9,7 @@ export default function Home() {
   const [extractedData, setExtractedData] = useState<Array<{ id: string; text: string; bbox: number[]; page: number }>>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);  // Change to selectedId
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +42,7 @@ export default function Home() {
   };
 
   const handleTextClick = (id: string) => {
-    setSelectedId(id === selectedId ? null : id);  // Update to use id
+    setSelectedId(id === selectedId ? null : id);
   };
 
   return (
@@ -82,7 +82,7 @@ export default function Home() {
             <PdfViewer 
               url={pdfUrl} 
               extractedData={extractedData} 
-              selectedId={selectedId}  // Change to selectedId
+              selectedId={selectedId}
             />
           ) : (
             <p className="text-gray-500">Enter a PDF URL above</p>
@@ -93,8 +93,8 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-2">Extracted Text</h2>
           <TextTranscript 
             data={extractedData}
-            selectedId={selectedId}  // Change to selectedId
-            onTextClick={handleTextClick}  // Already updated to use id
+            selectedId={selectedId}
+            onTextClick={handleTextClick}
           />
         </div>
       </div>
