@@ -19,7 +19,8 @@ export default function Home() {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:8000/extract', {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL }/extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
