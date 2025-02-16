@@ -4,6 +4,8 @@ import { useState } from 'react';
 import PdfViewer from '@/components/PdfViewer';
 import TextTranscript from '@/components/TextTranscript';
 
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf';
+
 // Mock data for testing
 const MOCK_EXTRACTED_DATA = [
   { 
@@ -30,12 +32,68 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedText, setSelectedText] = useState<string | null>(null);
 
+  const extractTextFromPDF = async (url: string) => {
+    try {
+      const loadingTask = getDocument(url);
+      const pdf = await loadingTask.promise;
+      const extracted = [];
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        for (const item of textContent.items) {
+          const textItem = item as any;
+          extracted.push({
+            text: textItem.str,
+            bbox: textItem.transform 
+              ? [
+                  textItem.transform[4],
+                  textItem.transform[5],
+                  textItem.transform[4] + textItem.width,
+                  textItem.transform[5] - textItem.height
+                ]
+              : [0, 0, 0, 0],
+            page: pageNum - 1
+          });
+        }
+      }
+      
+      return extracted;
+    } catch (err) {
+      setError('Error parsing PDF. Please ensure the URL is valid and CORS is enabled.');
+      return [];
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pdfUrl) return;
     
-    // Use mock data for now
-    setExtractedData(MOCK_EXTRACTED_DATA);
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('http://localhost:8000/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pdf_url: pdfUrl }),
+      });
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to process PDF');
+      }
+  
+      const data = await response.json();
+      setExtractedData(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTextClick = (text: string) => {

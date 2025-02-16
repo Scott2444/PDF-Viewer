@@ -11,6 +11,10 @@ import {
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import '@react-pdf-viewer/highlight/lib/styles/index.css';
+import * as pdfjs from 'pdfjs-dist';
+
+// Update the worker URL to match the version
+const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface PdfViewerProps {
   url: string;
@@ -35,51 +39,37 @@ const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) =>
 
   // Convert extractedData to the format expected by the highlight plugin
   useEffect(() => {
-    console.log('Running useEffect for extractedData and selectedText');
-    console.log('Selected Text: ', selectedText);
-    console.log('Extracted Data: ', extractedData);
-    console.log('pageHeights: ', pageHeights.length);
     if (selectedText && extractedData.length > 0 && pageHeights.length > 0) {
-      console.log('Filtering and mapping extractedData to highlights');
       const newHighlights = extractedData
         .filter((item) => item.text === selectedText)
         .map((item) => {
-          const pageHeight = pageHeights[item.page] || 0;
-          const [left, bottom, right, top] = item.bbox;
-
-          // Convert PDF coordinates (bottom-left) to viewer coordinates (top-left)
-          const y1 = pageHeight - top;
-          const y2 = pageHeight - bottom;
-
-          // Ensure the bounding box is valid (x1 < x2, y1 < y2)
+          const [left, top, right, bottom] = item.bbox;
+  
+          // Ensure the bounding box is valid
           const x1 = Math.min(left, right);
           const x2 = Math.max(left, right);
-          const y1Final = Math.min(y1, y2);
-          const y2Final = Math.max(y1, y2);
-
+          const y1 = Math.min(top, bottom);
+          const y2 = Math.max(top, bottom);
+  
           return {
             id: `highlight-${item.page}-${item.bbox.join('-')}`,
             pageIndex: item.page,
-            rects: [
-              {
-                x1: x1,
-                y1: y1Final,
-                x2: x2,
-                y2: y2Final,
-                width: x2 - x1,
-                height: y2Final - y1Final,
-              },
-            ],
+            rects: [{
+              x1: x1,
+              y1: y1,
+              x2: x2,
+              y2: y2,
+              width: x2 - x1,
+              height: y2 - y1,
+            }],
             content: {
               text: item.text,
             },
           };
         });
-
-      console.log('New highlights:', newHighlights);
+  
       setHighlights(newHighlights);
     } else {
-      console.log('No selectedText or extractedData, clearing highlights');
       setHighlights([]);
     }
   }, [extractedData, selectedText, pageHeights]);
@@ -151,7 +141,7 @@ const PdfViewer = ({ url, extractedData = [], selectedText }: PdfViewerProps) =>
 
   return (
     <div className="h-[600px]">
-      <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">
+      <Worker workerUrl={workerUrl}>
         <Viewer
           fileUrl={url}
           plugins={[
