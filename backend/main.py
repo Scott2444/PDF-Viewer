@@ -10,6 +10,7 @@ import io
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 from typing import List, Dict, Any
+import statistics
 
 app = FastAPI()
 
@@ -40,71 +41,124 @@ def convert_image_to_pdf_coords(image_x, image_y, image_w, image_h, page_width, 
         (image_y + image_h) * (page_height / image_h)  # y2 flipped to top-left origin
     ]
 
-def group_text_blocks(text_blocks, tolerance=5):
-    """Group text blocks into logical sections based on spatial proximity."""
-    grouped = []
-    current_group = []
+def calculate_text_heights(text_blocks):
+    """Calculate the heights of text blocks to determine appropriate thresholds"""
+    heights = []
+    for block in text_blocks:
+        height = block['bbox'][3] - block['bbox'][1]
+        if height > 0:  # Ensure valid height
+            heights.append(height)
     
-    # Sort text blocks by page, then by y-coordinate (top to bottom), then by x-coordinate (left to right)
-    sorted_blocks = sorted(text_blocks, key=lambda x: (x['page'], x['bbox'][1], x['bbox'][0]))
+    if not heights:
+        return 1.0  # Default if no valid heights
     
-    for block in sorted_blocks:
-        if not current_group:
-            current_group.append({
-                'id': block['id'],  # Preserve the ID of the first block
-                'text': block['text'],
-                'bbox': block['bbox'].copy(),  # Create a copy of the bounding box
-                'page': block['page']
-            })
-        else:
-            last_block = current_group[-1]
-            
-            # Check if the current block is on the same line/paragraph
-            if (block['page'] == last_block['page'] and
-                abs(block['bbox'][1] - last_block['bbox'][1]) <= tolerance and  # Similar y-coordinate
-                block['bbox'][0] <= last_block['bbox'][2] + tolerance):  # Close x-coordinate
-                
-                # Merge text and update bounding box
-                last_block['text'] += ' ' + block['text']
-                last_block['bbox'][2] = max(last_block['bbox'][2], block['bbox'][2])  # Update right edge
-                last_block['bbox'][3] = max(last_block['bbox'][3], block['bbox'][3])  # Update bottom edge
-            else:
-                # Start a new group
-                grouped.append(current_group)
-                current_group = [{
-                    'id': block['id'],  # Preserve the ID of the first block in the new group
-                    'text': block['text'],
-                    'bbox': block['bbox'].copy(),  # Create a copy of the bounding box
-                    'page': block['page']
-                }]
-    
-    if current_group:
-        grouped.append(current_group)
-    
-    # Return flattened groups (each group is now a single line)
-    flattened_groups = []
-    for group in grouped:
-        if len(group) == 1:
-            flattened_groups.append(group[0])
-        else:
-            # Merge all blocks in the group
-            merged = {
-                'id': group[0]['id'],
-                'text': ' '.join(block['text'] for block in group),
-                'bbox': [
-                    min(block['bbox'][0] for block in group),
-                    min(block['bbox'][1] for block in group),
-                    max(block['bbox'][2] for block in group),
-                    max(block['bbox'][3] for block in group)
-                ],
-                'page': group[0]['page']
-            }
-            flattened_groups.append(merged)
-    
-    return flattened_groups
+    # Use median to avoid outliers affecting the result
+    median_height = statistics.median(heights)
+    return median_height
 
-def group_paragraphs(lines: List[Dict[str, Any]], vertical_gap_threshold: float = 15.0):
-    """Group lines into paragraphs based on vertical proximity."""
+def group_text_blocks(text_blocks):
+    """Group text blocks into logical lines based on spatial proximity and reading order."""
+    # Calculate median text height to use for adaptive thresholds
+    median_height = calculate_text_heights(text_blocks)
+    
+    # Set horizontal tolerance based on text height
+    horizontal_tolerance = median_height * 0.3
+    
+    # Set vertical tolerance for same line
+    vertical_tolerance = median_height * 0.25
+    
+    # Group blocks that are on the same approximate horizontal line first
+    line_groups = []
+    current_line = []
+    
+    # Sort blocks first by page, then by y-coordinate (with tolerance for slight misalignments)
+    y_sorted_blocks = sorted(text_blocks, key=lambda x: (x['page'], int(x['bbox'][1] / vertical_tolerance)))
+    
+    current_y_group = None
+    for block in y_sorted_blocks:
+        y_group = int(block['bbox'][1] / vertical_tolerance)
+        
+        if current_y_group is None:
+            current_y_group = y_group
+            current_line.append(block)
+        elif block['page'] == current_line[-1]['page'] and y_group == current_y_group:
+            current_line.append(block)
+        else:
+            # Sort blocks within the line by x-coordinate
+            current_line.sort(key=lambda x: x['bbox'][0])
+            line_groups.append(current_line)
+            current_line = [block]
+            current_y_group = y_group
+    
+    if current_line:
+        current_line.sort(key=lambda x: x['bbox'][0])
+        line_groups.append(current_line)
+    
+    # Now merge blocks within each line
+    final_groups = []
+    for line in line_groups:
+        merged_line = []
+        current_group = []
+        
+        for block in line:
+            if not current_group:
+                current_group.append(block)
+            else:
+                last_block = current_group[-1]
+                
+                # Check if blocks should be merged (close enough horizontally)
+                if block['bbox'][0] <= last_block['bbox'][2] + horizontal_tolerance:
+                    # Merge with previous block
+                    last_block['text'] += ' ' + block['text']
+                    last_block['bbox'][2] = max(last_block['bbox'][2], block['bbox'][2])
+                    last_block['bbox'][3] = max(last_block['bbox'][3], block['bbox'][3])
+                else:
+                    # Start a new group
+                    merged_line.append({
+                        'id': current_group[0]['id'],
+                        'text': ' '.join(b['text'] for b in current_group),
+                        'bbox': [
+                            min(b['bbox'][0] for b in current_group),
+                            min(b['bbox'][1] for b in current_group),
+                            max(b['bbox'][2] for b in current_group),
+                            max(b['bbox'][3] for b in current_group)
+                        ],
+                        'page': current_group[0]['page']
+                    })
+                    current_group = [block]
+        
+        if current_group:
+            merged_line.append({
+                'id': current_group[0]['id'],
+                'text': ' '.join(b['text'] for b in current_group),
+                'bbox': [
+                    min(b['bbox'][0] for b in current_group),
+                    min(b['bbox'][1] for b in current_group),
+                    max(b['bbox'][2] for b in current_group),
+                    max(b['bbox'][3] for b in current_group)
+                ],
+                'page': current_group[0]['page']
+            })
+        
+        final_groups.extend(merged_line)
+    
+    return final_groups
+
+def group_paragraphs(lines: List[Dict[str, Any]]):
+    """Group lines into paragraphs based on vertical proximity and text size."""
+    if not lines:
+        return []
+    
+    # Calculate line heights to determine appropriate paragraph spacing threshold
+    line_heights = [line['bbox'][3] - line['bbox'][1] for line in lines]
+    if not line_heights:
+        return []
+    
+    median_line_height = statistics.median(line_heights)
+    
+    # Use 1.5 times the median line height as the paragraph spacing threshold
+    vertical_gap_threshold = median_line_height * 1.5
+    
     paragraphs = []
     current_paragraph = []
     
@@ -204,10 +258,10 @@ async def extract_text(request: PDFRequest):
                             'page': page_num
                         })
         
-        # Group text blocks into lines
+        # Group text blocks into lines with adaptive thresholds
         line_grouped_blocks = group_text_blocks(extracted_data)
         
-        # Group lines into paragraphs
+        # Group lines into paragraphs with adaptive thresholds
         paragraph_blocks = group_paragraphs(line_grouped_blocks)
         
         # Format paragraphs
